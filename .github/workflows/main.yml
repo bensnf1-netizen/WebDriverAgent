@@ -1,33 +1,35 @@
-name: Build WDA IPA
-on: [push, workflow_dispatch] # 允许手动触发
+name: Build Real Device IPA
+on: [push, workflow_dispatch]
 
 jobs:
-  build:
-    runs-on: macos-latest
+  build_ipa:
+    runs-on: macos-latest  # 这里改为最新系统，解决报错问题
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Build WDA for Generic iOS Device
+      - name: Build WDA Runner
         run: |
-          mkdir -p build/Payload
-          # 这一步是核心：在云端执行编译，生成真机用的 .app 文件
-          xcodebuild -project WebDriverAgent.xcodeproj \
-                     -scheme WebDriverAgentRunner \
-                     -destination "generic/platform=iOS" \
-                     -configuration Release \
-                     -derivedDataPath build_output \
-                     build-for-testing
+          # 仅编译真机所需的二进制文件，跳过所有签名检查
+          xcodebuild build-for-testing \
+            -project WebDriverAgent.xcodeproj \
+            -scheme WebDriverAgentRunner \
+            -destination "generic/platform=iOS" \
+            -configuration Release \
+            -derivedDataPath build_output \
+            CODE_SIGNING_ALLOWED=NO
 
-      - name: Package to IPA
+      - name: Prepare Payload
         run: |
-          # 找到编译出来的 .app 文件并放入 Payload 文件夹
-          find build_output -name "WebDriverAgentRunner-Runner.app" -exec cp -r {} build/Payload/ \;
-          cd build
+          mkdir -p Payload
+          # 找到编译出来的 .app 文件夹并放入 Payload
+          APP_PATH=$(find build_output -name "WebDriverAgentRunner-Runner.app" -type d | head -n 1)
+          cp -r "$APP_PATH" Payload/
+          # 打包成标准 IPA
           zip -r WebDriverAgent.ipa Payload/
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4 # 升级到 v4 兼容最新环境
         with:
-          name: WebDriverAgent-IPA
-          path: build/WebDriverAgent.ipa
+          name: WebDriverAgent-RealDevice-IPA
+          path: WebDriverAgent.ipa

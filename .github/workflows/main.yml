@@ -1,0 +1,33 @@
+name: Build WDA IPA
+on: [push, workflow_dispatch] # 允许手动触发
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Build WDA for Generic iOS Device
+        run: |
+          mkdir -p build/Payload
+          # 这一步是核心：在云端执行编译，生成真机用的 .app 文件
+          xcodebuild -project WebDriverAgent.xcodeproj \
+                     -scheme WebDriverAgentRunner \
+                     -destination "generic/platform=iOS" \
+                     -configuration Release \
+                     -derivedDataPath build_output \
+                     build-for-testing
+
+      - name: Package to IPA
+        run: |
+          # 找到编译出来的 .app 文件并放入 Payload 文件夹
+          find build_output -name "WebDriverAgentRunner-Runner.app" -exec cp -r {} build/Payload/ \;
+          cd build
+          zip -r WebDriverAgent.ipa Payload/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: WebDriverAgent-IPA
+          path: build/WebDriverAgent.ipa
